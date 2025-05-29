@@ -4,9 +4,10 @@
   "description": "Telegram bot for managing shop products",
   "main": "bot.js",
   "scripts": {
-    "start": "node bot.js",
-    "build": "echo 'No build step required'"
-  },
+  "prisma:generate": "prisma generate",
+  "build": "prisma generate && next build",
+  "start": "node bot.js"
+},
   "dependencies": {
     "telegraf": "^4.15.3",
     "@upstash/redis": "^1.28.4",
