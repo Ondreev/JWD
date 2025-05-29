@@ -4,7 +4,8 @@
   "description": "Telegram bot for managing shop products",
   "main": "bot.js",
   "scripts": {
-    "start": "node bot.js"
+    "start": "node bot.js",
+    "build": "echo 'No build step required'"
   },
   "dependencies": {
     "telegraf": "^4.15.3",
