@@ -2,7 +2,7 @@ let cart = [];
 
 async function loadProducts() {
   try {
-    const res = await fetch('/.netlify/functions/products');
+    const res = await fetch('/api/products');
     console.log('Response status:', res.status); // <--- Добавьте эту строку
     const products = await res.json();
     console.log('Products from API:', products); // <--- Добавьте эту строку
