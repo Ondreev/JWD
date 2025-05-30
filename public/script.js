@@ -1,6 +1,6 @@
 async function loadProducts() {
   try {
-    const res = await fetch('/.netlify/functions/products');
+    const res = await fetch('/api/products');
     const products = await res.json();
 
     if (!Array.isArray(products) || products.length === 0) {
