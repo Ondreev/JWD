@@ -8,6 +8,9 @@ const GROUP_ID = process.env.GROUP_ID || '-1002665972722';
 const REDIS_URL = process.env.UPSTASH_REDIS_REST_URL || 'https://gusc1-star-chow-30378.upstash.io';
 const REDIS_TOKEN = process.env.UPSTASH_REDIS_REST_TOKEN || 'AXaqASQgYWMyNTUxZmMtMDYxZS00YTRlLThlNjAtYTc5YWY5MTMwY2QyMDdiNTM2NDc0ZTEzNDU2OTk5ZGFiNDY1MzA1N2E2MTQ=';
 
+// URL веб-приложения
+const WEBAPP_URL = 'https://jwd-psi.vercel.app';
+
 // Инициализация Redis
 const redis = new Redis({
   url: REDIS_URL,
@@ -127,6 +130,21 @@ bot.start(async (ctx) => {
   }
 });
 
+// Команда /menu для отображения кнопки "Заказать товары"
+bot.command('menu', async (ctx) => {
+  try {
+    await ctx.reply(
+      'Нажмите кнопку ниже, чтобы заказать товары:',
+      Markup.inlineKeyboard([
+        Markup.button.webApp('🛒 Заказать товары', WEBAPP_URL)
+      ])
+    );
+  } catch (error) {
+    console.error('Ошибка при обработке команды /menu:', error);
+    await ctx.reply('Произошла ошибка. Пожалуйста, попробуйте позже.');
+  }
+});
+
 // Обработка нажатий на кнопки
 bot.action('add_product', async (ctx) => {
   try {
@@ -167,9 +185,9 @@ bot.action('edit_product', async (ctx) => {
       return;
     }
     
-    let message = 'Выберите ID товара для редактирования:\\n\\n';
+    let message = 'Выберите ID товара для редактирования:\n\n';
     products.forEach(product => {
-      message += `ID: ${product.id} - ${product.name} - ${product.price} руб.\\n`;
+      message += `ID: ${product.id} - ${product.name} - ${product.price} руб.\n`;
     });
     
     ctx.session = { action: 'edit_product' };
@@ -200,9 +218,9 @@ bot.action('delete_product', async (ctx) => {
       return;
     }
     
-    let message = 'Выберите ID товара для удаления:\\n\\n';
+    let message = 'Выберите ID товара для удаления:\n\n';
     products.forEach(product => {
-      message += `ID: ${product.id} - ${product.name} - ${product.price} руб.\\n`;
+      message += `ID: ${product.id} - ${product.name} - ${product.price} руб.\n`;
     });
     
     ctx.session = { action: 'delete_product' };
@@ -233,12 +251,12 @@ bot.action('list_products', async (ctx) => {
       return;
     }
     
-    let message = 'Список товаров:\\n\\n';
+    let message = 'Список товаров:\n\n';
     products.forEach(product => {
-      message += `ID: ${product.id}\\n`;
-      message += `Название: ${product.name}\\n`;
-      message += `Цена: ${product.price} руб.\\n`;
-      message += `Акция: ${product.promo ? 'Да' : 'Нет'}\\n\\n`;
+      message += `ID: ${product.id}\n`;
+      message += `Название: ${product.name}\n`;
+      message += `Цена: ${product.price} руб.\n`;
+      message += `Акция: ${product.promo ? 'Да' : 'Нет'}\n\n`;
     });
     
     await ctx.reply(message);
@@ -264,7 +282,7 @@ bot.action('set_min_items', async (ctx) => {
     const minItems = await redis.get('minItems') || 1;
     
     ctx.session = { action: 'set_min_items' };
-    await ctx.reply(`Текущее минимальное количество товаров: ${minItems}\\nВведите новое значение:`);
+    await ctx.reply(`Текущее минимальное количество товаров: ${minItems}\nВведите новое значение:`);
   } catch (error) {
     console.error('Ошибка при обработке кнопки set_min_items:', error);
     await ctx.answerCbQuery('Произошла ошибка. Пожалуйста, попробуйте позже.');
@@ -328,9 +346,9 @@ bot.action('delete_admin', async (ctx) => {
       return;
     }
     
-    let message = 'Выберите ID администратора для удаления:\\n\\n';
+    let message = 'Выберите ID администратора для удаления:\n\n';
     admins.forEach(admin => {
-      message += `ID: ${admin}\\n`;
+      message += `ID: ${admin}\n`;
     });
     
     ctx.session = { action: 'delete_admin' };
@@ -361,9 +379,9 @@ bot.action('list_admins', async (ctx) => {
       return;
     }
     
-    let message = 'Список администраторов:\\n\\n';
+    let message = 'Список администраторов:\n\n';
     admins.forEach(admin => {
-      message += `ID: ${admin}\\n`;
+      message += `ID: ${admin}\n`;
     });
     
     await ctx.reply(message);
@@ -551,7 +569,7 @@ bot.action(/assemble_(\d+)/, async (ctx) => {
     await redis.set(`order:${orderId}`, order);
     
     // Обновляем сообщение с заказом
-    await ctx.editMessageText(ctx.update.callback_query.message.text + '\\n\\n🟢 Заказ отправлен на сборку!');
+    await ctx.editMessageText(ctx.update.callback_query.message.text + '\n\n🟢 Заказ отправлен на сборку!');
   } catch (error) {
     console.error('Ошибка при обработке кнопки "Отправить на сборку":', error);
     await ctx.answerCbQuery('Произошла ошибка. Пожалуйста, попробуйте позже.');
@@ -612,7 +630,7 @@ bot.on('text', async (ctx) => {
       }
       
       ctx.session.productId = productId;
-      await ctx.reply(`Выбран товар: ${product.name}\\nЧто вы хотите изменить?`, createEditProductKeyboard());
+      await ctx.reply(`Выбран товар: ${product.name}\nЧто вы хотите изменить?`, createEditProductKeyboard());
       return;
     }
     
@@ -798,6 +816,10 @@ bot.on('photo', async (ctx) => {
       const photo = ctx.message.photo[ctx.message.photo.length - 1];
       const fileId = photo.file_id;
       
+      // Получаем ссылку на фото
+      const fileLink = await ctx.telegram.getFileLink(fileId);
+      const photoUrl = fileLink.href;
+      
       // Получаем счетчик товаров из Redis
       let productCounter = await redis.get('productCounter') || 0;
       
@@ -809,7 +831,7 @@ bot.on('photo', async (ctx) => {
         id: productCounter,
         name: ctx.session.product.name,
         price: ctx.session.product.price,
-        photo: fileId,
+        image: photoUrl, // теперь ссылка!
         promo: false,
       };
       
@@ -836,6 +858,10 @@ bot.on('photo', async (ctx) => {
       const photo = ctx.message.photo[ctx.message.photo.length - 1];
       const fileId = photo.file_id;
       
+      // Получаем ссылку на фото
+      const fileLink = await ctx.telegram.getFileLink(fileId);
+      const photoUrl = fileLink.href;
+      
       // Получаем список товаров из Redis
       const products = await redis.get('products') || [];
       
@@ -849,7 +875,7 @@ bot.on('photo', async (ctx) => {
       }
       
       // Обновляем фото товара
-      products[productIndex].photo = fileId;
+      products[productIndex].image = photoUrl;
       
       // Сохраняем обновленный список товаров в Redis
       await redis.set('products', products);
@@ -892,29 +918,30 @@ bot.on('message', async (ctx) => {
         status: 'new',
         createdAt: new Date().toISOString(),
       };
-// Сохраняем заказ в Redis
+      
+      // Сохраняем заказ в Redis
       await redis.set(`order:${orderCounter}`, newOrder);
       
       // Сохраняем обновленный счетчик заказов в Redis
       await redis.set('orderCounter', orderCounter);
       
       // Формируем сообщение с заказом
-      let orderMessage = `🛒 Новый заказ #${orderCounter}\\n\\n`;
-      orderMessage += `👤 Клиент: ${newOrder.customerName}\\n`;
-      orderMessage += `📞 Телефон: ${newOrder.customerPhone}\\n`;
-      orderMessage += `🏠 Адрес: ${newOrder.customerAddress}\\n`;
+      let orderMessage = `🛒 Новый заказ #${orderCounter}\n\n`;
+      orderMessage += `👤 Клиент: ${newOrder.customerName}\n`;
+      orderMessage += `📞 Телефон: ${newOrder.customerPhone}\n`;
+      orderMessage += `🏠 Адрес: ${newOrder.customerAddress}\n`;
       
       if (newOrder.customerComment) {
-        orderMessage += `💬 Комментарий: ${newOrder.customerComment}\\n`;
+        orderMessage += `💬 Комментарий: ${newOrder.customerComment}\n`;
       }
       
-      orderMessage += `\\n📋 Товары:\\n`;
+      orderMessage += `\n📋 Товары:\n`;
       
       newOrder.items.forEach(item => {
-        orderMessage += `- ${item.name} x${item.quantity} = ${item.price * item.quantity} руб.\\n`;
+        orderMessage += `- ${item.name} x${item.quantity} = ${item.price * item.quantity} руб.\n`;
       });
       
-      orderMessage += `\\n💰 Итого: ${newOrder.totalPrice} руб.`;
+      orderMessage += `\n💰 Итого: ${newOrder.totalPrice} руб.`;
       
       // Отправляем заказ в группу
       await bot.telegram.sendMessage(GROUP_ID, orderMessage, {
