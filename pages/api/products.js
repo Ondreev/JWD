@@ -1,24 +1,16 @@
-const products = [
-  {
-    id: 1,
-    name: "Картофель",
-    price: 30,
-    image: "potato.png"
-  },
-  {
-    id: 2,
-    name: "Морковь",
-    price: 25,
-    image: "carrot.png"
-  },
-  {
-    id: 3,
-    name: "Лук",
-    price: 20,
-    image: "onion.png"
-  }
-];
+import { Redis } from '@upstash/redis';
 
-export default function handler(req, res) {
-  res.status(200).json(products);
+const redis = new Redis({
+  url: process.env.UPSTASH_REDIS_REST_URL,
+  token: process.env.UPSTASH_REDIS_REST_TOKEN,
+});
+
+export default async function handler(req, res) {
+  try {
+    const products = await redis.get('products') || [];
+    res.status(200).json(products);
+  } catch (error) {
+    console.error('Ошибка при получении товаров из Redis:', error);
+    res.status(500).json({ error: 'Не удалось получить товары' });
+  }
 }
