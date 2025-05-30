@@ -1,3 +1,19 @@
+async function loadProducts() {
+  try {
+    const res = await fetch('/api/products');
+    const products = await res.json();
+
+    if (!Array.isArray(products) || products.length === 0) {
+      showError('Нет доступных товаров.');
+      return;
+    }
+
+    renderProducts(products);
+  } catch (e) {
+    showError('Ошибка при загрузке товаров. Пожалуйста, попробуйте позже.');
+  }
+}
+
 function renderProducts(products) {
   const productsContainer = document.getElementById('products');
   productsContainer.innerHTML = '';
@@ -7,7 +23,7 @@ function renderProducts(products) {
     item.innerHTML = `
       <div class="product-title">${product.name}</div>
       <div class="product-price">${product.price} руб.</div>
-      ${product.photo_url ? `<img src="${product.photo_url}" alt="${product.name}" />` : ''}
+      ${product.image ? `<img src="${product.image}" alt="${product.name}" />` : ''}
     `;
     productsContainer.appendChild(item);
   });
@@ -17,3 +33,5 @@ function showError(message) {
   const productsContainer = document.getElementById('products');
   productsContainer.innerHTML = `<div class="error">${message}</div>`;
 }
+
+window.addEventListener('DOMContentLoaded', loadProducts);
