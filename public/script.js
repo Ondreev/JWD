@@ -120,3 +120,54 @@ function showError(message) {
 }
 
 window.addEventListener('DOMContentLoaded', loadProducts);
+document.getElementById('order-button').addEventListener('click', handleOrder);
+
+function handleOrder() {
+  // Получаем данные покупателя
+  const name = document.getElementById('customer-name').value.trim();
+  const phone = document.getElementById('customer-phone').value.trim();
+  const address = document.getElementById('customer-address').value.trim();
+  const comment = document.getElementById('customer-comment').value.trim();
+
+  // Проверяем обязательные поля
+  if (!name || !phone || !address) {
+    showNotification('Пожалуйста, заполните все обязательные поля!');
+    return;
+  }
+
+  if (cart.length === 0) {
+    showNotification('Корзина пуста!');
+    return;
+  }
+
+  // Формируем заказ
+  const order = {
+    customer: { name, phone, address, comment },
+    items: cart
+  };
+
+  // Отправляем заказ на сервер (пример: POST /api/order)
+  fetch('/api/order', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(order)
+  })
+    .then(res => res.json())
+    .then(data => {
+      if (data.success) {
+        showNotification('Заказ успешно отправлен!');
+        cart = [];
+        updateCartDisplay();
+        // Можно очистить форму
+        document.getElementById('customer-name').value = '';
+        document.getElementById('customer-phone').value = '';
+        document.getElementById('customer-address').value = '';
+        document.getElementById('customer-comment').value = '';
+      } else {
+        showNotification('Ошибка при отправке заказа!');
+      }
+    })
+    .catch(() => {
+      showNotification('Ошибка при отправке заказа!');
+    });
+}
