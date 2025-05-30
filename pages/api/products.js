@@ -1,4 +1,4 @@
-exports.handler = async function(event, context) {
+export default async function handler(req, res) {
   const url = process.env.UPSTASH_REDIS_REST_URL + '/get/products';
   const token = process.env.UPSTASH_REDIS_REST_TOKEN;
   const botToken = process.env.BOT_TOKEN;
@@ -11,7 +11,7 @@ exports.handler = async function(event, context) {
     });
 
     const data = await response.json();
-    console.log('Data from Redis:', data); // <--- Добавьте эту строку
+    console.log('Data from Redis:', data);
 
     let products = data.result ? JSON.parse(data.result) : [];
 
@@ -22,7 +22,7 @@ exports.handler = async function(event, context) {
           // Получаем информацию о файле
           const fileResponse = await fetch(`https://api.telegram.org/bot${botToken}/getFile?file_id=${product.photo}`);
           const fileData = await fileResponse.json();
-          
+
           if (fileData.ok) {
             product.photo_url = `https://api.telegram.org/file/bot${botToken}/${fileData.result.file_path}`;
           }
@@ -32,21 +32,11 @@ exports.handler = async function(event, context) {
       }
     }
 
-    console.log('Products:', products); // <--- Добавьте эту строку
+    console.log('Products:', products);
 
-    return {
-      statusCode: 200,
-      headers: {
-        'Access-Control-Allow-Origin': '*',
-        'Access-Control-Allow-Headers': 'Content-Type',
-      },
-      body: JSON.stringify(products),
-    };
+    res.status(200).json(products);
   } catch (error) {
     console.error('Ошибка в products.js:', error);
-    return {
-      statusCode: 500,
-      body: JSON.stringify({ error: 'Ошибка при загрузке товаров' }),
-    };
+    res.status(500).json({ error: 'Ошибка при загрузке товаров' });
   }
-};
+}
