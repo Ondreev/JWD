@@ -3,9 +3,9 @@ let cart = [];
 async function loadProducts() {
   try {
     const res = await fetch('/api/products');
-    console.log('Response status:', res.status); // <--- Добавьте эту строку
+    console.log('Response status:', res.status);
     const products = await res.json();
-    console.log('Products from API:', products); // <--- Добавьте эту строку
+    console.log('Products from API:', products);
 
     if (!Array.isArray(products) || products.length === 0) {
       showError('Нет доступных товаров.');
@@ -33,7 +33,7 @@ function renderProducts(products) {
       <div class="product-info">
         <div class="product-title">${product.name}</div>
         <div class="product-price">${product.price} руб.</div>
-        <button class="add-to-cart-btn" onclick="addToCart(${product.id}, '${product.name}', ${product.price})">
+        <button class="add-to-cart-btn" onclick="addToCart(${product.id}, '${product.name.replace(/'/g, "\\'")}', ${product.price})">
           Добавить в корзину
         </button>
       </div>
@@ -57,30 +57,41 @@ function addToCart(id, name, price) {
   }
   
   updateCartDisplay();
-  
-  // Показываем уведомление (без внешних библиотек)
   showNotification(`${name} добавлен в корзину!`);
 }
 
 function updateCartDisplay() {
-  const cartCount = cart.reduce((sum, item) => sum + item.quantity, 0);
   const cartTotal = cart.reduce((sum, item) => sum + (item.price * item.quantity), 0);
-  
-  // Обновляем счетчик корзины
-  const cartCountElement = document.getElementById('cart-count');
-  if (cartCountElement) {
-    cartCountElement.textContent = cartCount;
-  }
-  
+
   // Обновляем общую сумму
   const cartTotalElement = document.getElementById('cart-total');
   if (cartTotalElement) {
-    cartTotalElement.textContent = `${cartTotal} руб.`;
+    cartTotalElement.textContent = `Итого: ${cartTotal} руб.`;
+  }
+
+  // Обновляем список товаров в корзине
+  const cartItemsElement = document.getElementById('cart-items');
+  if (cartItemsElement) {
+    if (cart.length === 0) {
+      cartItemsElement.innerHTML = '<div class="empty-cart">Корзина пуста</div>';
+    } else {
+      cartItemsElement.innerHTML = cart.map(item =>
+        `<div class="cart-item">
+          <span>${item.name} x${item.quantity}</span>
+          <span>${item.price * item.quantity} руб.</span>
+        </div>`
+      ).join('');
+    }
+  }
+
+  // Делаем кнопку "Оформить заказ" активной, если корзина не пуста
+  const orderButton = document.getElementById('order-button');
+  if (orderButton) {
+    orderButton.disabled = cart.length === 0;
   }
 }
 
 function showNotification(message) {
-  // Простое уведомление без внешних библиотек
   const notification = document.createElement('div');
   notification.className = 'notification';
   notification.textContent = message;
