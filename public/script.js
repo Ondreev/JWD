@@ -3,7 +3,9 @@ let cart = [];
 async function loadProducts() {
   try {
     const res = await fetch('/.netlify/functions/products');
+    console.log('Response status:', res.status); // <--- Добавьте эту строку
     const products = await res.json();
+    console.log('Products from API:', products); // <--- Добавьте эту строку
 
     if (!Array.isArray(products) || products.length === 0) {
       showError('Нет доступных товаров.');
