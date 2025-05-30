@@ -28,7 +28,7 @@ h1, h2, h3 {
     display: flex;
     flex-wrap: wrap;
     gap: 20px;
-    justify-content: center; /* Центрирует карточки по центру */
+    justify-content: center;
     margin-bottom: 30px;
 }
 
@@ -40,10 +40,10 @@ h1, h2, h3 {
     width: 220px;
     display: flex;
     flex-direction: column;
-    align-items: center;      /* Центрирует всё внутри карточки */
+    align-items: center;
     padding: 15px;
     box-shadow: 0 2px 8px rgba(0,0,0,0.03);
-    text-align: center;       /* Центрирует текст */
+    text-align: center;
 }
 
 /* Фото товара */
@@ -70,9 +70,14 @@ h1, h2, h3 {
 
 /* Информация о товаре */
 .product-title {
-    font-weight: bold;
-    margin-bottom: 5px;
-    text-align: center;
+    font-weight: bold !important;
+    margin-bottom: 5px !important;
+    text-align: center !important;
+    color: #222 !important;
+    display: block !important;
+    font-size: 18px !important;
+    line-height: 1.2 !important;
+    word-break: break-word !important;
 }
 
 .product-price {
