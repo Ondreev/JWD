@@ -326,3 +326,15 @@ textarea {
 .add-to-cart-btn:hover {
   background: #388e3c;
 }
+.cart-item {
+  display: flex;
+  justify-content: space-between;
+  padding: 4px 0;
+  border-bottom: 1px solid #eee;
+}
+
+.empty-cart {
+  color: #888;
+  text-align: center;
+  padding: 10px 0;
+}
