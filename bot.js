@@ -133,12 +133,18 @@ bot.start(async (ctx) => {
 // Команда /menu для отображения кнопки "Заказать товары"
 bot.command('menu', async (ctx) => {
   try {
-    await ctx.reply(
-      'Нажмите кнопку ниже, чтобы заказать товары:',
-      Markup.inlineKeyboard([
-        Markup.button.webApp('🛒 Заказать товары', WEBAPP_URL)
-      ])
-    );
+    if (ctx.chat.type === 'private') {
+      await ctx.reply(
+        'Нажмите кнопку ниже, чтобы заказать товары:',
+        Markup.inlineKeyboard([
+          Markup.button.webApp('🛒 Заказать товары', WEBAPP_URL)
+        ])
+      );
+    } else {
+      await ctx.reply(
+        'Для заказа товаров используйте кнопку в меню бота (в шапке чата) или напишите мне в личку!'
+      );
+    }
   } catch (error) {
     console.error('Ошибка при обработке команды /menu:', error);
     await ctx.reply('Произошла ошибка. Пожалуйста, попробуйте позже.');
