@@ -8,8 +8,8 @@ const GROUP_ID = process.env.GROUP_ID || '-1002665972722';
 const REDIS_URL = process.env.UPSTASH_REDIS_REST_URL || 'https://gusc1-star-chow-30378.upstash.io';
 const REDIS_TOKEN = process.env.UPSTASH_REDIS_REST_TOKEN || 'AXaqASQgYWMyNTUxZmMtMDYxZS00YTRlLThlNjAtYTc5YWY5MTMwY2QyMDdiNTM2NDc0ZTEzNDU2OTk5ZGFiNDY1MzA1N2E2MTQ=';
 
-// URL веб-приложения
-const WEBAPP_URL = 'https://jwd-psi.vercel.app';
+// URL веб-приложения (замени на свой URL с Netlify)
+const WEBAPP_URL = 'https://flourishing-cuchufli-5b4d4c.netlify.app';
 
 // Инициализация Redis
 const redis = new Redis({
@@ -19,11 +19,6 @@ const redis = new Redis({
 
 // Инициализация бота
 const bot = new Telegraf(BOT_TOKEN);
-
-// Устанавливаем команду в меню бота (шапка чата)
-bot.telegram.setMyCommands([
-  { command: 'menu', description: 'Заказать товары' }
-]);
 
 // Middleware для сессий
 bot.use(session());
@@ -127,13 +122,8 @@ bot.start(async (ctx) => {
     if (isUserAdmin) {
       await ctx.reply('Привет! Я бот для управления товарами в твоем мини-магазине.', createMenuKeyboard());
     } else {
-      await ctx.reply('Привет! Я бот для управления товарами в мини-магазине. К сожалению, у вас нет доступа к админ-панели.');
-    }
-
-    // В личке сразу показываем кнопку заказа
-    if (ctx.chat.type === 'private') {
       await ctx.reply(
-        'Нажмите кнопку ниже, чтобы заказать товары:',
+        'Привет! Нажмите кнопку ниже, чтобы заказать товары:',
         Markup.inlineKeyboard([
           Markup.button.webApp('🛒 Заказать товары', WEBAPP_URL)
         ])
@@ -145,26 +135,31 @@ bot.start(async (ctx) => {
   }
 });
 
-// Команда /menu - показывает кнопку в личке и ссылку в группе
+// Команда /menu для отображения кнопки "Заказать товары"
 bot.command('menu', async (ctx) => {
   try {
-    if (ctx.chat.type === 'private') {
-      await ctx.reply(
-        'Нажмите кнопку ниже, чтобы заказать товары:',
-        Markup.inlineKeyboard([
-          Markup.button.webApp('🛒 Заказать товары', WEBAPP_URL)
-        ])
-      );
-    } else {
-      await ctx.reply(
-        `Для заказа товаров нажмите на кнопку "Заказать товары" в меню бота (в шапке чата) или перейдите по ссылке: ${WEBAPP_URL}`
-      );
-    }
+    await ctx.reply(
+      'Нажмите кнопку ниже, чтобы заказать товары:',
+      Markup.inlineKeyboard([
+        Markup.button.webApp('🛒 Заказать товары', WEBAPP_URL)
+      ])
+    );
   } catch (error) {
     console.error('Ошибка при обработке команды /menu:', error);
     await ctx.reply('Произошла ошибка. Пожалуйста, попробуйте позже.');
   }
 });
+
+// Настройка меню бота для группы
+bot.telegram.setChatMenuButton({
+  menu_button: {
+    type: 'web_app',
+    text: '🛒 Заказать товары',
+    web_app: {
+      url: WEBAPP_URL
+    }
+  }
+}).catch(console.error);
 
 // Обработка нажатий на кнопки
 bot.action('add_product', async (ctx) => {
@@ -286,6 +281,7 @@ bot.action('list_products', async (ctx) => {
     await ctx.answerCbQuery('Произошла ошибка. Пожалуйста, попробуйте позже.');
   }
 });
+
 bot.action('set_min_items', async (ctx) => {
   try {
     const userId = ctx.from.id;
@@ -596,9 +592,162 @@ bot.action(/assemble_(\d+)/, async (ctx) => {
   }
 });
 
-// Обработка текстовых сообщений
-bot.on('text', async (ctx) => {
+// Обработка получения фотографии
+bot.on('photo', async (ctx) => {
   try {
+    const userId = ctx.from.id;
+    const isUserAdmin = await isAdmin(userId);
+
+    if (!isUserAdmin) {
+      await ctx.reply('У вас нет доступа к админ-панели.');
+      return;
+    }
+
+    // Добавление товара
+    if (ctx.session?.action === 'add_product' && ctx.session.product && ctx.session.product.price) {
+      const photo = ctx.message.photo[ctx.message.photo.length - 1];
+      const fileId = photo.file_id;
+      
+      // Получаем счетчик товаров из Redis
+      let productCounter = await redis.get('productCounter') || 0;
+      
+      // Увеличиваем счетчик
+      productCounter++;
+      
+      // Создаем новый товар
+      const newProduct = {
+        id: productCounter,
+        name: ctx.session.product.name,
+        price: ctx.session.product.price,
+        photo: fileId,
+        promo: false,
+      };
+      
+      // Получаем список товаров из Redis
+      const products = await redis.get('products') || [];
+      
+      // Добавляем новый товар в список
+      products.push(newProduct);
+      
+      // Сохраняем обновленный список товаров в Redis
+      await redis.set('products', products);
+      
+      // Сохраняем обновленный счетчик товаров в Redis
+      await redis.set('productCounter', productCounter);
+      
+      await ctx.reply(`Товар "${newProduct.name}" успешно добавлен.`);
+      ctx.session = null;
+      await ctx.reply('Главное меню:', createMenuKeyboard());
+      return;
+    }
+    
+    // Редактирование товара
+    if (ctx.session?.action === 'edit_product' && ctx.session.productId && ctx.session.editField === 'photo') {
+      const photo = ctx.message.photo[ctx.message.photo.length - 1];
+      const fileId = photo.file_id;
+      
+      // Получаем список товаров из Redis
+      const products = await redis.get('products') || [];
+      
+      // Находим товар по ID
+      const productIndex = products.findIndex(product => product.id === ctx.session.productId);
+      
+      if (productIndex === -1) {
+        await ctx.reply('Товар не найден.');
+        ctx.session = null;
+        return;
+      }
+      
+      // Обновляем фото товара
+      products[productIndex].photo = fileId;
+      
+      // Сохраняем обновленный список товаров в Redis
+      await redis.set('products', products);
+      
+      await ctx.reply('Фотография товара успешно обновлена.');
+      ctx.session = null;
+      await ctx.reply('Главное меню:', createMenuKeyboard());
+      return;
+    }
+  } catch (error) {
+    console.error('Ошибка при обработке фотографии:', error);
+    await ctx.reply('Произошла ошибка. Пожалуйста, попробуйте позже.');
+  }
+});
+
+// ОБЪЕДИНЕННЫЙ обработчик сообщений
+bot.on('message', async (ctx) => {
+  try {
+    // СНАЧАЛА проверяем, есть ли данные из WebApp
+    if (ctx.message.web_app_data) {
+      console.log('Получены данные из WebApp:', ctx.message.web_app_data.data);
+      
+      const data = JSON.parse(ctx.message.web_app_data.data);
+      console.log('Распарсенные данные заказа:', data);
+      
+      // Получаем счетчик заказов из Redis
+      let orderCounter = await redis.get('orderCounter') || 0;
+      
+      // Увеличиваем счетчик
+      orderCounter++;
+      
+      // Создаем новый заказ
+      const newOrder = {
+        id: orderCounter,
+        userId: ctx.from.id,
+        userName: ctx.from.first_name,
+        items: data.items,
+        totalPrice: data.totalPrice,
+        customerName: data.customerName,
+        customerPhone: data.customerPhone,
+        customerAddress: data.customerAddress,
+        customerComment: data.customerComment,
+        status: 'new',
+        createdAt: new Date().toISOString(),
+      };
+
+      // Сохраняем заказ в Redis
+      await redis.set(`order:${orderCounter}`, newOrder);
+      
+      // Сохраняем обновленный счетчик заказов в Redis
+      await redis.set('orderCounter', orderCounter);
+      
+      // Формируем сообщение с заказом
+      let orderMessage = `🛒 Новый заказ #${orderCounter}\n\n`;
+      orderMessage += `👤 Клиент: ${newOrder.customerName}\n`;
+      orderMessage += `📞 Телефон: ${newOrder.customerPhone}\n`;
+      orderMessage += `🏠 Адрес: ${newOrder.customerAddress}\n`;
+      
+      if (newOrder.customerComment) {
+        orderMessage += `💬 Комментарий: ${newOrder.customerComment}\n`;
+      }
+      
+      orderMessage += `\n📋 Товары:\n`;
+      
+      newOrder.items.forEach(item => {
+        orderMessage += `- ${item.name} x${item.quantity} = ${item.price * item.quantity} руб.\n`;
+      });
+      
+      orderMessage += `\n💰 Итого: ${newOrder.totalPrice} руб.`;
+      
+      console.log('Отправляем заказ в группу:', GROUP_ID);
+      
+      // Отправляем заказ в группу
+      await bot.telegram.sendMessage(GROUP_ID, orderMessage, {
+        reply_markup: {
+          inline_keyboard: [
+            [{ text: 'Отправить на сборку', callback_data: `assemble_${orderCounter}` }]
+          ]
+        }
+      });
+      
+      // Отправляем подтверждение пользователю
+      await ctx.reply('Ваш заказ успешно отправлен! Мы свяжемся с вами в ближайшее время.');
+      
+      return; // Важно! Выходим из функции, чтобы не обрабатывать как обычное текстовое сообщение
+    }
+
+    // ЕСЛИ это НЕ WebApp данные, то обрабатываем как обычное сообщение
     const userId = ctx.from.id;
     const isUserAdmin = await isAdmin(userId);
 
@@ -815,169 +964,8 @@ bot.on('text', async (ctx) => {
       await ctx.reply('Главное меню:', createMenuKeyboard());
     }
   } catch (error) {
-    console.error('Ошибка при обработке текстового сообщения:', error);
+    console.error('Ошибка при обработке сообщения:', error);
     await ctx.reply('Произошла ошибка. Пожалуйста, попробуйте позже.');
-  }
-});
-
-// Обработка получения фотографии
-bot.on('photo', async (ctx) => {
-  try {
-    const userId = ctx.from.id;
-    const isUserAdmin = await isAdmin(userId);
-
-    if (!isUserAdmin) {
-      await ctx.reply('У вас нет доступа к админ-панели.');
-      return;
-    }
-
-    // Добавление товара
-    if (ctx.session?.action === 'add_product' && ctx.session.product && ctx.session.product.price) {
-      const photo = ctx.message.photo[ctx.message.photo.length - 1];
-      const fileId = photo.file_id;
-      
-      // Получаем ссылку на фото
-      const fileLink = await ctx.telegram.getFileLink(fileId);
-      const photoUrl = fileLink.href;
-      
-      // Получаем счетчик товаров из Redis
-      let productCounter = await redis.get('productCounter') || 0;
-      
-      // Увеличиваем счетчик
-      productCounter++;
-      
-      // Создаем новый товар
-      const newProduct = {
-        id: productCounter,
-        name: ctx.session.product.name,
-        price: ctx.session.product.price,
-        image: photoUrl,
-        promo: false,
-      };
-      
-      // Получаем список товаров из Redis
-      const products = await redis.get('products') || [];
-      
-      // Добавляем новый товар в список
-      products.push(newProduct);
-      
-      // Сохраняем обновленный список товаров в Redis
-      await redis.set('products', products);
-      
-      // Сохраняем обновленный счетчик товаров в Redis
-      await redis.set('productCounter', productCounter);
-      
-      await ctx.reply(`Товар "${newProduct.name}" успешно добавлен.`);
-      ctx.session = null;
-      await ctx.reply('Главное меню:', createMenuKeyboard());
-      return;
-    }
-    
-    // Редактирование товара
-    if (ctx.session?.action === 'edit_product' && ctx.session.productId && ctx.session.editField === 'photo') {
-      const photo = ctx.message.photo[ctx.message.photo.length - 1];
-      const fileId = photo.file_id;
-      
-      // Получаем ссылку на фото
-      const fileLink = await ctx.telegram.getFileLink(fileId);
-      const photoUrl = fileLink.href;
-      
-      // Получаем список товаров из Redis
-      const products = await redis.get('products') || [];
-      
-      // Находим товар по ID
-      const productIndex = products.findIndex(product => product.id === ctx.session.productId);
-      
-      if (productIndex === -1) {
-        await ctx.reply('Товар не найден.');
-        ctx.session = null;
-        return;
-      }
-      
-      // Обновляем фото товара
-      products[productIndex].image = photoUrl;
-      
-      // Сохраняем обновленный список товаров в Redis
-      await redis.set('products', products);
-      
-      await ctx.reply('Фотография товара успешно обновлена.');
-      ctx.session = null;
-      await ctx.reply('Главное меню:', createMenuKeyboard());
-      return;
-    }
-  } catch (error) {
-    console.error('Ошибка при обработке фотографии:', error);
-    await ctx.reply('Произошла ошибка. Пожалуйста, попробуйте позже.');
-  }
-});
-
-// Обработка данных, полученных из Telegram Web App
-bot.on('message', async (ctx) => {
-  try {
-    if (ctx.message.web_app_data) {
-      const data = JSON.parse(ctx.message.web_app_data.data);
-      console.log('Получены данные из Web App:', data);
-      
-      // Получаем счетчик заказов из Redis
-      let orderCounter = await redis.get('orderCounter') || 0;
-      
-      // Увеличиваем счетчик
-      orderCounter++;
-      
-      // Создаем новый заказ
-      const newOrder = {
-        id: orderCounter,
-        userId: ctx.from.id,
-        userName: ctx.from.first_name,
-        items: data.items,
-        totalPrice: data.totalPrice,
-        customerName: data.customerName,
-        customerPhone: data.customerPhone,
-        customerAddress: data.customerAddress,
-        customerComment: data.customerComment,
-        status: 'new',
-        createdAt: new Date().toISOString(),
-      };
-      
-      // Сохраняем заказ в Redis
-      await redis.set(`order:${orderCounter}`, newOrder);
-      
-      // Сохраняем обновленный счетчик заказов в Redis
-      await redis.set('orderCounter', orderCounter);
-      
-      // Формируем сообщение с заказом
-      let orderMessage = `🛒 Новый заказ #${orderCounter}\n\n`;
-      orderMessage += `👤 Клиент: ${newOrder.customerName}\n`;
-      orderMessage += `📞 Телефон: ${newOrder.customerPhone}\n`;
-      orderMessage += `🏠 Адрес: ${newOrder.customerAddress}\n`;
-      
-      if (newOrder.customerComment) {
-        orderMessage += `💬 Комментарий: ${newOrder.customerComment}\n`;
-      }
-      
-      orderMessage += `\n📋 Товары:\n`;
-      
-      newOrder.items.forEach(item => {
-        orderMessage += `- ${item.name} x${item.quantity} = ${item.price * item.quantity} руб.\n`;
-      });
-      
-      orderMessage += `\n💰 Итого: ${newOrder.totalPrice} руб.`;
-      
-      // Отправляем заказ в группу
-      await bot.telegram.sendMessage(GROUP_ID, orderMessage, {
-        reply_markup: {
-          inline_keyboard: [
-            [{ text: 'Отправить на сборку', callback_data: `assemble_${orderCounter}` }]
-          ]
-        }
-      });
-      
-      // Отправляем подтверждение пользователю
-      await ctx.reply('Ваш заказ успешно отправлен! Мы свяжемся с вами в ближайшее время.');
-    }
-  } catch (error) {
-    console.error('Ошибка при обработке данных из Web App:', error);
-    await ctx.reply('Произошла ошибка при отправке заказа. Пожалуйста, попробуйте позже.');
   }
 });
 
