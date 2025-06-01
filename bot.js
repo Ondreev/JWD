@@ -123,20 +123,14 @@ bot.start(async (ctx) => {
 
     if (isUserAdmin) {
       await ctx.reply('Привет! Я бот для управления товарами в твоем мини-магазине.', createMenuKeyboard());
-      await ctx.reply(
-        'Вы также можете оформить заказ как обычный пользователь:',
-        Markup.inlineKeyboard([
-          Markup.button.webApp('🛒 Заказать товары', WEBAPP_URL)
-        ])
-      );
-    } else {
-      await ctx.reply(
-        'Привет! Нажмите кнопку ниже, чтобы заказать товары:',
-        Markup.inlineKeyboard([
-          Markup.button.webApp('🛒 Заказать товары', WEBAPP_URL)
-        ])
-      );
     }
+    // WebApp-кнопка для всех (и для админа, и для обычного пользователя)
+    await ctx.reply(
+      'Нажмите кнопку ниже, чтобы заказать товары:',
+      Markup.inlineKeyboard([
+        Markup.button.webApp('🛒 Заказать товары', WEBAPP_URL)
+      ])
+    );
   } catch (error) {
     console.error('Ошибка при обработке команды /start:', error);
     await ctx.reply('Произошла ошибка. Пожалуйста, попробуйте позже.');
