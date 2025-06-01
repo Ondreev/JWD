@@ -9,7 +9,7 @@ const REDIS_URL = process.env.UPSTASH_REDIS_REST_URL || 'https://gusc1-star-chow
 const REDIS_TOKEN = process.env.UPSTASH_REDIS_REST_TOKEN || 'AXaqASQgYWMyNTUxZmMtMDYxZS00YTRlLThlNjAtYTc5YWY5MTMwY2QyMDdiNTM2NDc0ZTEzNDU2OTk5ZGFiNDY1MzA1N2E2MTQ=';
 
 // URL веб-приложения (замени на свой URL с Netlify)
-const WEBAPP_URL = 'https://flourishing-cuchufli-5b4d4c.netlify.app';
+const WEBAPP_URL = 'https://jwd-psi.vercel.app/';
 
 // Инициализация Redis
 const redis = new Redis({
