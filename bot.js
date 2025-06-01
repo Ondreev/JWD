@@ -115,6 +115,8 @@ function createYesNoKeyboard(action, id) {
 
 // Команда /start
 bot.start(async (ctx) => {
+  if (ctx.chat.type !== 'private') return; // Только в личке!
+
   try {
     const userId = ctx.from.id;
     const isUserAdmin = await isAdmin(userId);
@@ -137,6 +139,22 @@ bot.start(async (ctx) => {
     }
   } catch (error) {
     console.error('Ошибка при обработке команды /start:', error);
+    await ctx.reply('Произошла ошибка. Пожалуйста, попробуйте позже.');
+  }
+});
+
+bot.command('menu', async (ctx) => {
+  if (ctx.chat.type !== 'private') return; // Только в личке!
+
+  try {
+    await ctx.reply(
+      'Нажмите кнопку ниже, чтобы заказать товары:',
+      Markup.inlineKeyboard([
+        Markup.button.webApp('🛒 Заказать товары', WEBAPP_URL)
+      ])
+    );
+  } catch (error) {
+    console.error('Ошибка при обработке команды /menu:', error);
     await ctx.reply('Произошла ошибка. Пожалуйста, попробуйте позже.');
   }
 });
