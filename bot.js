@@ -152,11 +152,6 @@ bot.command('menu', async (ctx) => {
     await ctx.reply('Произошла ошибка. Пожалуйста, попробуйте позже.');
   }
 });
-  } catch (error) {
-    console.error('Ошибка при обработке команды /menu:', error);
-    await ctx.reply('Произошла ошибка. Пожалуйста, попробуйте позже.');
-  }
-});
 
 // Настройка меню бота для группы
 bot.telegram.setChatMenuButton({
