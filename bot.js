@@ -136,12 +136,18 @@ bot.start(async (ctx) => {
 });
 
 // Команда /menu для отображения кнопки "Заказать товары"
+// Команда /menu для отображения кнопки "Заказать товары"
 bot.command('menu', async (ctx) => {
   try {
     await ctx.reply('Нажмите кнопку ниже, чтобы заказать товары:', {
       reply_markup: {
         inline_keyboard: [
-          [{ text: '🛒 Заказать товары', web_app: { url: WEBAPP_URL } }]
+          [
+            {
+              text: '🛒 Заказать товары',
+              web_app: { url: WEBAPP_URL }
+            }
+          ]
         ]
       }
     });
