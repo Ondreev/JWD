@@ -135,21 +135,18 @@ bot.start(async (ctx) => {
   }
 });
 
-// Команда /menu для отображения кнопки "Заказать товары"
+// Команда /menu для отображения обычной inline-кнопки с url
 bot.command('menu', async (ctx) => {
-  try {
-    await ctx.reply('Нажмите кнопку ниже, чтобы заказать товары:', {
-      reply_markup: {
-        inline_keyboard: [
-          [
-            {
-              text: '🛒 Заказать товары',
-              web_app: { url: WEBAPP_URL }
-            }
-          ]
+  await ctx.reply('Открыть мини-приложение:', {
+    reply_markup: {
+      inline_keyboard: [
+        [
+          { text: '🛒 Открыть миниапп', url: WEBAPP_URL }
         ]
-      }
-    });
+      ]
+    }
+  });
+});
   } catch (error) {
     console.error('Ошибка при обработке команды /menu:', error);
     await ctx.reply('Произошла ошибка. Пожалуйста, попробуйте позже.');
