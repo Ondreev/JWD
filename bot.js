@@ -121,6 +121,12 @@ bot.start(async (ctx) => {
 
     if (isUserAdmin) {
       await ctx.reply('Привет! Я бот для управления товарами в твоем мини-магазине.', createMenuKeyboard());
+      await ctx.reply(
+        'Вы также можете оформить заказ как обычный пользователь:',
+        Markup.inlineKeyboard([
+          Markup.button.webApp('🛒 Заказать товары', WEBAPP_URL)
+        ])
+      );
     } else {
       await ctx.reply(
         'Привет! Нажмите кнопку ниже, чтобы заказать товары:',
