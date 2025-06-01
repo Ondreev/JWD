@@ -1,6 +1,5 @@
 const { Telegraf, Markup, session } = require('telegraf');
 const { Redis } = require('@upstash/redis');
-const axios = require('axios');
 
 // Конфигурация
 const BOT_TOKEN = process.env.BOT_TOKEN || '8111751981:AAGZZZzrOu2tdKWm6xhQvquBh2_viQRXCMk';
@@ -46,6 +45,8 @@ async function initRedis() {
     if (!minItems) await redis.set('minItems', 1);
     const productCounter = await redis.get('productCounter');
     if (!productCounter) await redis.set('productCounter', 0);
+    const orderCounter = await redis.get('orderCounter');
+    if (!orderCounter) await redis.set('orderCounter', 0);
     console.log('Redis инициализирован');
   } catch (error) {
     console.error('Ошибка при инициализации Redis:', error);
@@ -95,36 +96,18 @@ function createYesNoKeyboard(action, id) {
   ]);
 }
 
-// Команда /start
-bot.start(async (ctx) => {
-  // Только в личке!
-  if (ctx.chat.type !== 'private') return;
-
-  try {
-    const userId = ctx.from.id;
-    const isUserAdmin = await isAdmin(userId);
-
-    if (isUserAdmin) {
-      // Админ-меню
-      await ctx.reply(
-        '🔑 Админ-меню:',
-        Markup.inlineKeyboard([
-          [Markup.button.callback('📦 Управление товарами', 'admin_products')],
-          [Markup.button.callback('📋 Список заказов', 'admin_orders')]
-        ])
-      );
-    }
-
-    // Приветствие для всех (без WebApp-кнопки, она теперь только внизу через BotFather)
-    await ctx.reply('Привет! Для заказа используйте кнопку внизу чата.');
-  } catch (error) {
-    console.error('Ошибка при обработке команды /start:', error);
-    await ctx.reply('Произошла ошибка. Пожалуйста, попробуйте позже.');
+// Функция для создания клавиатуры управления заказом
+function createOrderManagementKeyboard(orderId, status) {
+  const buttons = [];
+  if (status === 'new') {
+    buttons.push(Markup.button.callback('Отправить на сборку', `assemble_${orderId}`));
   }
-});
-
-// --- ДАЛЬШЕ ВЕСЬ ОСТАЛЬНЫЙ КОД ОСТАВЛЯЕТСЯ БЕЗ ИЗМЕНЕНИЙ ---
-// (всё, что идёт после bot.start, не трогайте, кроме удаления команды /menu)
+  if (status === 'assembling') {
+    buttons.push(Markup.button.callback('Завершить заказ', `complete_${orderId}`));
+  }
+  buttons.push(Markup.button.callback('Удалить заказ', `delete_order_${orderId}`));
+  return Markup.inlineKeyboard([buttons]);
+}
 
 // Команда /start
 bot.start(async (ctx) => {
@@ -135,7 +118,6 @@ bot.start(async (ctx) => {
     const isUserAdmin = await isAdmin(userId);
 
     if (isUserAdmin) {
-      // Админ-меню
       await ctx.reply(
         '🔑 Админ-меню:',
         Markup.inlineKeyboard([
@@ -145,7 +127,6 @@ bot.start(async (ctx) => {
       );
     }
 
-    // Приветствие для всех
     await ctx.reply('Привет! Для заказа используйте кнопку внизу чата.');
   } catch (error) {
     console.error('Ошибка при обработке команды /start:', error);
@@ -153,53 +134,8 @@ bot.start(async (ctx) => {
   }
 });
 
-bot.command('menu', async (ctx) => {
-  if (ctx.chat.type !== 'private') return; // Только в личке!
-
-  try {
-    await ctx.reply(
-      'Нажмите кнопку ниже, чтобы заказать товары:',
-      Markup.inlineKeyboard([
-        Markup.button.webApp('🛒 Заказать товары', WEBAPP_URL)
-      ])
-    );
-  } catch (error) {
-    console.error('Ошибка при обработке команды /menu:', error);
-    await ctx.reply('Произошла ошибка. Пожалуйста, попробуйте позже.');
-  }
-});
-
-// Команда /menu для отображения обычной inline-кнопки с url
-bot.command('menu', async (ctx) => {
-  try {
-    await ctx.reply('Открыть мини-приложение:', {
-      reply_markup: {
-        inline_keyboard: [
-          [
-            { text: '🛒 Открыть миниапп', url: WEBAPP_URL }
-          ]
-        ]
-      }
-    });
-  } catch (error) {
-    console.error('Ошибка при обработке команды /menu:', error);
-    await ctx.reply('Произошла ошибка. Пожалуйста, попробуйте позже.');
-  }
-});
-
-// Настройка меню бота для группы
-bot.telegram.setChatMenuButton({
-  menu_button: {
-    type: 'web_app',
-    text: '🛒 Заказать товары',
-    web_app: {
-      url: WEBAPP_URL
-    }
-  }
-}).catch(console.error);
-
-// Обработка нажатий на кнопки
-bot.action('add_product', async (ctx) => {
+// --- Обработчик для кнопки "Управление товарами" ---
+bot.action('admin_products', async (ctx) => {
   try {
     const userId = ctx.from.id;
     const isUserAdmin = await isAdmin(userId);
@@ -210,10 +146,126 @@ bot.action('add_product', async (ctx) => {
     }
 
     await ctx.answerCbQuery();
-    ctx.session = { action: 'add_product' };
-    await ctx.reply('Введите название товара:');
+    await ctx.reply('Главное меню управления товарами:', createMenuKeyboard());
   } catch (error) {
-    console.error('Ошибка при обработке кнопки add_product:', error);
+    console.error('Ошибка при обработке admin_products:', error);
+    await ctx.answerCbQuery('Произошла ошибка. Пожалуйста, попробуйте позже.');
+  }
+});
+
+// --- Обработчик для кнопки "Список заказов" ---
+bot.action('admin_orders', async (ctx) => {
+  try {
+    const userId = ctx.from.id;
+    const isUserAdmin = await isAdmin(userId);
+
+    if (!isUserAdmin) {
+      await ctx.answerCbQuery('У вас нет доступа к этой функции.');
+      return;
+    }
+
+    await ctx.answerCbQuery();
+
+    let orderCounter = await redis.get('orderCounter') || 0;
+    if (orderCounter === 0) {
+      await ctx.reply('Заказов пока нет.');
+      return;
+    }
+
+    let found = false;
+    for (let i = 1; i <= orderCounter; i++) {
+      const order = await redis.get(`order:${i}`);
+      if (order) {
+        found = true;
+        let orderMessage = `🛒 Заказ #${order.id}\n`;
+        orderMessage += `👤 Клиент: ${order.customerName}\n`;
+        orderMessage += `📞 Телефон: ${order.customerPhone}\n`;
+        orderMessage += `🏠 Адрес: ${order.customerAddress}\n`;
+        if (order.customerComment) {
+          orderMessage += `💬 Комментарий: ${order.customerComment}\n`;
+        }
+        orderMessage += `\n📋 Товары:\n`;
+        order.items.forEach(item => {
+          orderMessage += `- ${item.name} x${item.quantity} = ${item.price * item.quantity} руб.\n`;
+        });
+        orderMessage += `\n💰 Итого: ${order.totalPrice} руб.`;
+        orderMessage += `\nСтатус: ${order.status === 'new' ? '🟡 Новый' : order.status === 'assembling' ? '🟠 На сборке' : '🟢 Завершён'}`;
+
+        await ctx.reply(orderMessage, createOrderManagementKeyboard(order.id, order.status));
+      }
+    }
+    if (!found) {
+      await ctx.reply('Заказов пока нет.');
+    }
+  } catch (error) {
+    console.error('Ошибка при обработке admin_orders:', error);
+    await ctx.answerCbQuery('Произошла ошибка. Пожалуйста, попробуйте позже.');
+  }
+});
+
+// --- Обработчики управления заказом ---
+bot.action(/assemble_(\d+)/, async (ctx) => {
+  try {
+    const userId = ctx.from.id;
+    const isUserAdmin = await isAdmin(userId);
+    if (!isUserAdmin) {
+      await ctx.answerCbQuery('У вас нет доступа к этой функции.');
+      return;
+    }
+    await ctx.answerCbQuery('Заказ отправлен на сборку!');
+    const orderId = ctx.match[1];
+    const order = await redis.get(`order:${orderId}`);
+    if (!order) {
+      await ctx.reply('Заказ не найден.');
+      return;
+    }
+    order.status = 'assembling';
+    await redis.set(`order:${orderId}`, order);
+    await ctx.reply(`Заказ #${orderId} отправлен на сборку.`, createOrderManagementKeyboard(orderId, order.status));
+  } catch (error) {
+    console.error('Ошибка при обработке assemble:', error);
+    await ctx.answerCbQuery('Произошла ошибка. Пожалуйста, попробуйте позже.');
+  }
+});
+
+bot.action(/complete_(\d+)/, async (ctx) => {
+  try {
+    const userId = ctx.from.id;
+    const isUserAdmin = await isAdmin(userId);
+    if (!isUserAdmin) {
+      await ctx.answerCbQuery('У вас нет доступа к этой функции.');
+      return;
+    }
+    await ctx.answerCbQuery('Заказ завершён!');
+    const orderId = ctx.match[1];
+    const order = await redis.get(`order:${orderId}`);
+    if (!order) {
+      await ctx.reply('Заказ не найден.');
+      return;
+    }
+    order.status = 'completed';
+    await redis.set(`order:${orderId}`, order);
+    await ctx.reply(`Заказ #${orderId} завершён.`);
+  } catch (error) {
+    console.error('Ошибка при обработке complete:', error);
+    await ctx.answerCbQuery('Произошла ошибка. Пожалуйста, попробуйте позже.');
+  }
+});
+
+bot.action(/delete_order_(\d+)/, async (ctx) => {
+  try {
+    const userId = ctx.from.id;
+    const isUserAdmin = await isAdmin(userId);
+    if (!isUserAdmin) {
+      await ctx.answerCbQuery('У вас нет доступа к этой функции.');
+      return;
+    }
+    await ctx.answerCbQuery('Заказ удалён!');
+    const orderId = ctx.match[1];
+    await redis.del(`order:${orderId}`);
+    await ctx.reply(`Заказ #${orderId} удалён.`);
+  } catch (error) {
+    console.error('Ошибка при обработке delete_order:', error);
     await ctx.answerCbQuery('Произошла ошибка. Пожалуйста, попробуйте позже.');
   }
 });
@@ -462,6 +514,25 @@ bot.action('back_to_menu', async (ctx) => {
   }
 });
 
+bot.action('add_product', async (ctx) => {
+  try {
+    const userId = ctx.from.id;
+    const isUserAdmin = await isAdmin(userId);
+
+    if (!isUserAdmin) {
+      await ctx.answerCbQuery('У вас нет доступа к этой функции.');
+      return;
+    }
+
+    await ctx.answerCbQuery();
+    ctx.session = { action: 'add_product' };
+    await ctx.reply('Введите название товара:');
+  } catch (error) {
+    console.error('Ошибка при обработке кнопки add_product:', error);
+    await ctx.answerCbQuery('Произошла ошибка. Пожалуйста, попробуйте позже.');
+  }
+});
+
 // Обработка кнопок редактирования товара
 bot.action(/edit_(name|price|photo|promo)/, async (ctx) => {
   try {
@@ -588,43 +659,6 @@ bot.action(/delete_(yes|no)_(\d+)/, async (ctx) => {
     await ctx.reply('Главное меню:', createMenuKeyboard());
   } catch (error) {
     console.error('Ошибка при обработке кнопки да/нет для удаления товара:', error);
-    await ctx.answerCbQuery('Произошла ошибка. Пожалуйста, попробуйте позже.');
-  }
-});
-
-// Обработка кнопки "Отправить на сборку"
-bot.action(/assemble_(\d+)/, async (ctx) => {
-  try {
-    const userId = ctx.from.id;
-    const isUserAdmin = await isAdmin(userId);
-
-    if (!isUserAdmin) {
-      await ctx.answerCbQuery('У вас нет доступа к этой функции.');
-      return;
-    }
-
-    await ctx.answerCbQuery('Заказ отправлен на сборку!');
-    
-    const orderId = ctx.match[1];
-    
-    // Получаем заказ из Redis
-    const order = await redis.get(`order:${orderId}`);
-    
-    if (!order) {
-      await ctx.reply('Заказ не найден.');
-      return;
-    }
-    
-    // Обновляем статус заказа
-    order.status = 'assembling';
-    
-    // Сохраняем обновленный заказ в Redis
-    await redis.set(`order:${orderId}`, order);
-    
-    // Обновляем сообщение с заказом
-    await ctx.editMessageText(ctx.update.callback_query.message.text + '\n\n🟢 Заказ отправлен на сборку!');
-  } catch (error) {
-    console.error('Ошибка при обработке кнопки "Отправить на сборку":', error);
     await ctx.answerCbQuery('Произошла ошибка. Пожалуйста, попробуйте позже.');
   }
 });
