@@ -8,7 +8,7 @@ const GROUP_ID = process.env.GROUP_ID || '-1002665972722';
 const REDIS_URL = process.env.UPSTASH_REDIS_REST_URL || 'https://gusc1-star-chow-30378.upstash.io';
 const REDIS_TOKEN = process.env.UPSTASH_REDIS_REST_TOKEN || 'AXaqASQgYWMyNTUxZmMtMDYxZS00YTRlLThlNjAtYTc5YWY5MTMwY2QyMDdiNTM2NDc0ZTEzNDU2OTk5ZGFiNDY1MzA1N2E2MTQ=';
 
-// URL веб-приложения (замени на свой URL с Netlify)
+// URL веб-приложения
 const WEBAPP_URL = 'https://jwd-psi.vercel.app';
 
 // Инициализация Redis
@@ -29,13 +29,10 @@ const ADMIN_IDS = [1922996803, 530258581, 6418671958];
 // Проверка, является ли пользователь администратором
 async function isAdmin(userId) {
   try {
-    // Получаем список админов из Redis
     const admins = await redis.get('admins') || [];
-    // Проверяем, есть ли пользователь в списке админов
     return ADMIN_IDS.includes(userId) || admins.includes(userId);
   } catch (error) {
     console.error('Ошибка при проверке администратора:', error);
-    // В случае ошибки проверяем только хардкод-список
     return ADMIN_IDS.includes(userId);
   }
 }
@@ -43,27 +40,12 @@ async function isAdmin(userId) {
 // Инициализация данных в Redis
 async function initRedis() {
   try {
-    // Проверяем, есть ли список админов в Redis
     const admins = await redis.get('admins');
-    if (!admins) {
-      // Если нет, создаем его
-      await redis.set('admins', ADMIN_IDS);
-    }
-
-    // Проверяем, есть ли минимальное количество товаров в Redis
+    if (!admins) await redis.set('admins', ADMIN_IDS);
     const minItems = await redis.get('minItems');
-    if (!minItems) {
-      // Если нет, устанавливаем значение по умолчанию
-      await redis.set('minItems', 1);
-    }
-
-    // Проверяем, есть ли счетчик товаров в Redis
+    if (!minItems) await redis.set('minItems', 1);
     const productCounter = await redis.get('productCounter');
-    if (!productCounter) {
-      // Если нет, устанавливаем значение по умолчанию
-      await redis.set('productCounter', 0);
-    }
-
+    if (!productCounter) await redis.set('productCounter', 0);
     console.log('Redis инициализирован');
   } catch (error) {
     console.error('Ошибка при инициализации Redis:', error);
@@ -112,6 +94,37 @@ function createYesNoKeyboard(action, id) {
     ],
   ]);
 }
+
+// Команда /start
+bot.start(async (ctx) => {
+  // Только в личке!
+  if (ctx.chat.type !== 'private') return;
+
+  try {
+    const userId = ctx.from.id;
+    const isUserAdmin = await isAdmin(userId);
+
+    if (isUserAdmin) {
+      // Админ-меню
+      await ctx.reply(
+        '🔑 Админ-меню:',
+        Markup.inlineKeyboard([
+          [Markup.button.callback('📦 Управление товарами', 'admin_products')],
+          [Markup.button.callback('📋 Список заказов', 'admin_orders')]
+        ])
+      );
+    }
+
+    // Приветствие для всех (без WebApp-кнопки, она теперь только внизу через BotFather)
+    await ctx.reply('Привет! Для заказа используйте кнопку внизу чата.');
+  } catch (error) {
+    console.error('Ошибка при обработке команды /start:', error);
+    await ctx.reply('Произошла ошибка. Пожалуйста, попробуйте позже.');
+  }
+});
+
+// --- ДАЛЬШЕ ВЕСЬ ОСТАЛЬНЫЙ КОД ОСТАВЛЯЕТСЯ БЕЗ ИЗМЕНЕНИЙ ---
+// (всё, что идёт после bot.start, не трогайте, кроме удаления команды /menu)
 
 // Команда /start
 bot.start(async (ctx) => {
