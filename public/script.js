@@ -1,3 +1,12 @@
+// Инициализация Telegram Web App
+if (window.Telegram && window.Telegram.WebApp) {
+  window.Telegram.WebApp.ready();
+  window.Telegram.WebApp.expand();
+  console.log('Telegram WebApp инициализирован');
+} else {
+  console.error('Telegram WebApp API не найден');
+}
+
 let cart = [];
 
 async function loadProducts() {
@@ -60,6 +69,19 @@ function addToCart(id, name, price) {
   showNotification(`${name} добавлен в корзину!`);
 }
 
+function removeFromCart(id) {
+  const itemIndex = cart.findIndex(item => item.id === id);
+  
+  if (itemIndex !== -1) {
+    if (cart[itemIndex].quantity > 1) {
+      cart[itemIndex].quantity -= 1;
+    } else {
+      cart.splice(itemIndex, 1);
+    }
+    updateCartDisplay();
+  }
+}
+
 function updateCartDisplay() {
   const cartTotal = cart.reduce((sum, item) => sum + (item.price * item.quantity), 0);
 
@@ -77,8 +99,16 @@ function updateCartDisplay() {
     } else {
       cartItemsElement.innerHTML = cart.map(item =>
         `<div class="cart-item">
-          <span>${item.name} x${item.quantity}</span>
-          <span>${item.price * item.quantity} руб.</span>
+          <div class="cart-item-info">
+            <span class="cart-item-name">${item.name}</span>
+            <span class="cart-item-price">${item.price} руб. x ${item.quantity}</span>
+          </div>
+          <div class="cart-item-controls">
+            <button class="cart-btn" onclick="removeFromCart(${item.id})">-</button>
+            <span class="cart-quantity">${item.quantity}</span>
+            <button class="cart-btn" onclick="addToCart(${item.id}, '${item.name.replace(/'/g, "\\'")}', ${item.price})">+</button>
+          </div>
+          <div class="cart-item-total">${item.price * item.quantity} руб.</div>
         </div>`
       ).join('');
     }
@@ -91,83 +121,192 @@ function updateCartDisplay() {
   }
 }
 
-function showNotification(message) {
+function showNotification(message, type = 'success') {
   const notification = document.createElement('div');
   notification.className = 'notification';
   notification.textContent = message;
+  
+  const backgroundColor = type === 'error' ? '#f44336' : '#4CAF50';
+  
   notification.style.cssText = `
     position: fixed;
     top: 20px;
     right: 20px;
-    background: #4CAF50;
+    background: ${backgroundColor};
     color: white;
-    padding: 15px;
-    border-radius: 5px;
+    padding: 15px 20px;
+    border-radius: 8px;
     z-index: 1000;
+    box-shadow: 0 4px 12px rgba(0,0,0,0.15);
+    font-weight: 500;
+    max-width: 300px;
+    word-wrap: break-word;
     animation: slideIn 0.3s ease;
   `;
+  
+  // Добавляем CSS анимацию, если её нет
+  if (!document.querySelector('#notification-styles')) {
+    const style = document.createElement('style');
+    style.id = 'notification-styles';
+    style.textContent = `
+      @keyframes slideIn {
+        from {
+          transform: translateX(100%);
+          opacity: 0;
+        }
+        to {
+          transform: translateX(0);
+          opacity: 1;
+        }
+      }
+    `;
+    document.head.appendChild(style);
+  }
   
   document.body.appendChild(notification);
   
   setTimeout(() => {
-    notification.remove();
+    notification.style.animation = 'slideIn 0.3s ease reverse';
+    setTimeout(() => {
+      if (notification.parentNode) {
+        notification.remove();
+      }
+    }, 300);
   }, 3000);
 }
 
 function showError(message) {
   const productsContainer = document.getElementById('products-list');
-  productsContainer.innerHTML = `<div class="error">${message}</div>`;
+  productsContainer.innerHTML = `
+    <div class="error" style="
+      text-align: center;
+      padding: 40px 20px;
+      color: #666;
+      font-size: 16px;
+    ">
+      ${message}
+    </div>
+  `;
 }
 
-window.addEventListener('DOMContentLoaded', loadProducts);
-document.getElementById('order-button').addEventListener('click', handleOrder);
-
 function handleOrder() {
+  console.log('handleOrder вызвана'); // Для отладки
+  
   // Получаем данные покупателя
   const name = document.getElementById('customer-name').value.trim();
   const phone = document.getElementById('customer-phone').value.trim();
   const address = document.getElementById('customer-address').value.trim();
   const comment = document.getElementById('customer-comment').value.trim();
 
+  console.log('Данные формы:', { name, phone, address, comment }); // Для отладки
+
   // Проверяем обязательные поля
   if (!name || !phone || !address) {
-    showNotification('Пожалуйста, заполните все обязательные поля!');
+    showNotification('Пожалуйста, заполните все обязательные поля!', 'error');
     return;
   }
 
   if (cart.length === 0) {
-    showNotification('Корзина пуста!');
+    showNotification('Корзина пуста!', 'error');
     return;
   }
 
-  // Формируем заказ
-  const order = {
-    customer: { name, phone, address, comment },
-    items: cart
+  // Вычисляем общую стоимость
+  const totalPrice = cart.reduce((sum, item) => sum + (item.price * item.quantity), 0);
+
+  // Формируем данные для отправки в бота
+  const orderData = {
+    items: cart,
+    totalPrice: totalPrice,
+    customerName: name,
+    customerPhone: phone,
+    customerAddress: address,
+    customerComment: comment
   };
 
-  // Отправляем заказ на сервер (пример: POST /api/order)
-  fetch('/api/order', {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify(order)
-  })
-    .then(res => res.json())
-    .then(data => {
-      if (data.success) {
-        showNotification('Заказ успешно отправлен!');
-        cart = [];
-        updateCartDisplay();
-        // Можно очистить форму
-        document.getElementById('customer-name').value = '';
-        document.getElementById('customer-phone').value = '';
-        document.getElementById('customer-address').value = '';
-        document.getElementById('customer-comment').value = '';
-      } else {
-        showNotification('Ошибка при отправке заказа!');
+  console.log("Данные перед отправкой в Telegram:", JSON.stringify(orderData)); // Для отладки
+
+  try {
+    // Проверяем доступность Telegram WebApp API
+    if (window.Telegram && window.Telegram.WebApp && window.Telegram.WebApp.sendData) {
+      console.log('Отправляем данные через Telegram WebApp API'); // Для отладки
+      
+      // Отправляем данные в Telegram бота
+      window.Telegram.WebApp.sendData(JSON.stringify(orderData));
+      
+      // Очищаем корзину и форму после отправки
+      cart = [];
+      updateCartDisplay();
+      document.getElementById('customer-name').value = '';
+      document.getElementById('customer-phone').value = '';
+      document.getElementById('customer-address').value = '';
+      document.getElementById('customer-comment').value = '';
+      
+      showNotification('Заказ отправлен! Ожидайте подтверждения.');
+      
+      // Закрываем WebApp через небольшую задержку
+      setTimeout(() => {
+        if (window.Telegram && window.Telegram.WebApp && window.Telegram.WebApp.close) {
+          window.Telegram.WebApp.close();
+        }
+      }, 2000);
+      
+    } else {
+      console.error('Telegram WebApp API недоступен или метод sendData не найден');
+      console.log('window.Telegram:', window.Telegram);
+      if (window.Telegram) {
+        console.log('window.Telegram.WebApp:', window.Telegram.WebApp);
       }
-    })
-    .catch(() => {
-      showNotification('Ошибка при отправке заказа!');
-    });
+      
+      // Fallback для тестирования вне Telegram
+      showNotification('Тестовый режим: заказ сформирован, но не отправлен', 'error');
+      console.log('Заказ (тестовый режим):', orderData);
+    }
+  } catch (error) {
+    console.error('Ошибка при отправке заказа:', error);
+    showNotification('Ошибка при отправке заказа!', 'error');
+  }
+}
+
+// Инициализация при загрузке страницы
+window.addEventListener('DOMContentLoaded', function() {
+  console.log('DOM загружен, инициализируем приложение');
+  
+  // Загружаем товары
+  loadProducts();
+  
+  // Инициализируем отображение корзины
+  updateCartDisplay();
+  
+  // Привязываем обработчик к кнопке заказа
+  const orderButton = document.getElementById('order-button');
+  if (orderButton) {
+    orderButton.addEventListener('click', handleOrder);
+    console.log('Обработчик кнопки заказа привязан');
+  } else {
+    console.error('Кнопка order-button не найдена');
+  }
+});
+
+// Дополнительные функции для работы с Telegram WebApp
+if (window.Telegram && window.Telegram.WebApp) {
+  // Настраиваем главную кнопку Telegram
+  window.Telegram.WebApp.MainButton.setText('Оформить заказ');
+  window.Telegram.WebApp.MainButton.onClick(handleOrder);
+  
+  // Показываем главную кнопку только когда корзина не пуста
+  function updateMainButton() {
+    if (cart.length > 0) {
+      window.Telegram.WebApp.MainButton.show();
+    } else {
+      window.Telegram.WebApp.MainButton.hide();
+    }
+  }
+  
+  // Переопределяем updateCartDisplay для работы с главной кнопкой
+  const originalUpdateCartDisplay = updateCartDisplay;
+  updateCartDisplay = function() {
+    originalUpdateCartDisplay();
+    updateMainButton();
+  };
 }
