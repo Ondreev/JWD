@@ -115,22 +115,25 @@ function createYesNoKeyboard(action, id) {
 
 // Команда /start
 bot.start(async (ctx) => {
-  if (ctx.chat.type !== 'private') return; // Только в личке!
+  if (ctx.chat.type !== 'private') return;
 
   try {
     const userId = ctx.from.id;
     const isUserAdmin = await isAdmin(userId);
 
     if (isUserAdmin) {
-      await ctx.reply('Привет! Я бот для управления товарами в твоем мини-магазине.', createMenuKeyboard());
+      // Админ-меню
+      await ctx.reply(
+        '🔑 Админ-меню:',
+        Markup.inlineKeyboard([
+          [Markup.button.callback('📦 Управление товарами', 'admin_products')],
+          [Markup.button.callback('📋 Список заказов', 'admin_orders')]
+        ])
+      );
     }
-    // WebApp-кнопка для всех (и для админа, и для обычного пользователя)
-    await ctx.reply(
-      'Нажмите кнопку ниже, чтобы заказать товары:',
-      Markup.inlineKeyboard([
-        Markup.button.webApp('🛒 Заказать товары', WEBAPP_URL)
-      ])
-    );
+
+    // Приветствие для всех
+    await ctx.reply('Привет! Для заказа используйте кнопку внизу чата.');
   } catch (error) {
     console.error('Ошибка при обработке команды /start:', error);
     await ctx.reply('Произошла ошибка. Пожалуйста, попробуйте позже.');
