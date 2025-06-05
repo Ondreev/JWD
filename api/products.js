@@ -7,29 +7,55 @@ const redis = new Redis({
 });
 
 export default async function handler(req, res) {
+  console.log('🔧 START PRODUCTS HANDLER');
+
   try {
-    const count = await redis.get('productCounter') || 0;
+    const count = await redis.get('productCounter');
+    console.log('🔢 productCounter =', count);
+
+    if (!count) {
+      return res.status(200).json([]);
+    }
+
     const products = [];
 
     for (let i = 1; i <= count; i++) {
       const product = await redis.get(`product:${i}`);
+      console.log(`📦 product:${i} =`, product);
+
       if (!product) continue;
 
-      if (product.media) {
-        const fileRes = await fetch(`https://api.telegram.org/bot${BOT_TOKEN}/getFile?file_id=${product.media}`);
-        const fileData = await fileRes.json();
-        if (fileData.ok) {
-          const filePath = fileData.result.file_path;
-          product.photo_url = `https://api.telegram.org/file/bot${BOT_TOKEN}/${filePath}`;
+      // Если объект сериализован как строка — нужно распарсить
+      let parsedProduct = product;
+      if (typeof product === 'string') {
+        try {
+          parsedProduct = JSON.parse(product);
+        } catch (e) {
+          console.warn(`⚠️ product:${i} не распарсился`);
         }
       }
 
-      products.push(product);
+      // Добавим ссылку на фото, если есть
+      if (parsedProduct.media) {
+        try {
+          const fileRes = await fetch(`https://api.telegram.org/bot${BOT_TOKEN}/getFile?file_id=${parsedProduct.media}`);
+          const fileData = await fileRes.json();
+          if (fileData.ok) {
+            const filePath = fileData.result.file_path;
+            parsedProduct.photo_url = `https://api.telegram.org/file/bot${BOT_TOKEN}/${filePath}`;
+          }
+        } catch (e) {
+          console.error(`❌ Ошибка получения фото для product:${i}`, e);
+        }
+      }
+
+      products.push(parsedProduct);
     }
 
+    console.log('✅ Итоговый массив товаров:', products.length);
     res.status(200).json(products);
   } catch (err) {
-    console.error('Ошибка API products:', err);
+    console.error('❌ Ошибка API products:', err);
     res.status(500).json({ error: 'Ошибка сервера' });
   }
 }
