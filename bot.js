@@ -40,70 +40,100 @@ bot.hears('🛠 Админ-панель', async (ctx) => {
 });
 
 bot.on('message', async (ctx) => {
-  if (!ctx.message.web_app_data) return;
   try {
-    const data = JSON.parse(ctx.message.web_app_data.data);
-    const allValid = data.items.every(item => {
-      const box = item.minQty || 1;
-      return item.quantity % box === 0;
-    });
-    if (!allValid) {
-      await ctx.reply('Некоторые товары должны заказываться кратно размеру коробки. Пожалуйста, проверьте количество.');
-      return;
-    }
+    if (!ctx.session) ctx.session = {};
 
-    let orderCounter = await redis.get('orderCounter') || 0;
-    orderCounter++;
-
-    const newOrder = {
-      id: orderCounter,
-      userId: ctx.from.id,
-      userName: ctx.from.first_name,
-      items: data.items,
-      totalPrice: data.totalPrice,
-      customerName: data.customerName,
-      customerPhone: data.customerPhone,
-      customerAddress: data.customerAddress,
-      customerComment: data.customerComment,
-      status: 'new',
-      createdAt: new Date().toISOString()
-    };
-
-    await redis.set(`order:${orderCounter}`, newOrder);
-    await redis.set('orderCounter', orderCounter);
-
-    let orderMessage = `🛒 Заказ #${orderCounter}
-`;
-    orderMessage += `👤 Имя: ${newOrder.customerName}
-📞 Тел: ${newOrder.customerPhone}
-🏠 Адрес: ${newOrder.customerAddress}
-`;
-    if (newOrder.customerComment) orderMessage += `💬 Комментарий: ${newOrder.customerComment}
-`;
-    orderMessage += `
-📋 Состав:
-`;
-
-    for (const item of newOrder.items) {
-      const promoMark = item.promo ? '🔥 АКЦИЯ! ' : '';
-      const minQtyInfo = item.minQty ? `(упаковка: ${item.minQty})` : '';
-      orderMessage += `- ${promoMark}${item.name} x${item.quantity} = ${item.price * item.quantity} руб. ${minQtyInfo}
-`;
-    }
-    orderMessage += `
-💰 Итого: ${newOrder.totalPrice} руб.`;
-
-    for (const adminId of ADMIN_IDS) {
-      try {
-        await bot.telegram.sendMessage(adminId, orderMessage);
-      } catch (e) {
-        console.error(`Ошибка отправки админу ${adminId}:`, e.description);
+    // Обработка WebApp заказа
+    if (ctx.message.web_app_data) {
+      const data = JSON.parse(ctx.message.web_app_data.data);
+      const allValid = data.items.every(item => {
+        const box = item.minQty || 1;
+        return item.quantity % box === 0;
+      });
+      if (!allValid) {
+        return ctx.reply('Некоторые товары должны заказываться кратно размеру коробки.');
       }
+
+      const orderId = await redis.incr('orderCounter');
+      const order = {
+        id: orderId,
+        user: ctx.from,
+        items: data.items,
+        totalPrice: data.totalPrice,
+        customerName: data.customerName,
+        customerPhone: data.customerPhone,
+        customerAddress: data.customerAddress,
+        customerComment: data.customerComment,
+        status: 'new',
+        createdAt: Date.now()
+      };
+      await redis.set(`order:${orderId}`, order);
+      await redis.lpush('orders', orderId);
+
+      const message = `🛒 Новый заказ #${orderId}
+👤 Клиент: ${order.customerName}
+📞 Телефон: ${order.customerPhone}
+🏠 Адрес: ${order.customerAddress}
+💬 Комментарий: ${order.customerComment}
+📋 Товары:\n${order.items.map(i => `- ${i.name} x${i.quantity} = ${i.price * i.quantity} руб.`).join('\n')}\n\n💰 Итого: ${order.totalPrice} руб.`;
+
+      for (const adminId of ADMIN_IDS) {
+        try {
+          await bot.telegram.sendMessage(adminId, message);
+        } catch (e) {
+          console.error('Ошибка отправки админу:', e);
+        }
+      }
+
+      return ctx.reply('✅ Заказ принят! Спасибо!');
     }
-    await ctx.reply('✅ Заказ оформлен! Мы свяжемся с вами.');
+
+    // Добавление товара по шагам
+    if (ctx.session.step === 'product_name') {
+      ctx.session.newProduct = { name: ctx.message.text };
+      ctx.session.step = 'product_price';
+      return ctx.reply('💰 Введите цену товара в рублях:');
+    }
+
+    if (ctx.session.step === 'product_price') {
+      const price = parseFloat(ctx.message.text);
+      if (isNaN(price)) return ctx.reply('❌ Введите корректную цену.');
+      ctx.session.newProduct.price = price;
+      ctx.session.step = 'product_minQty';
+      return ctx.reply('📦 Укажите минимальное количество (в упаковке):');
+    }
+
+    if (ctx.session.step === 'product_minQty') {
+      const qty = parseInt(ctx.message.text);
+      if (isNaN(qty)) return ctx.reply('❌ Введите корректное количество.');
+      ctx.session.newProduct.minQty = qty;
+      ctx.session.step = 'product_promo';
+      return ctx.reply('🔥 Это акционный товар? (да/нет)');
+    }
+
+    if (ctx.session.step === 'product_promo') {
+      ctx.session.newProduct.promo = ctx.message.text.toLowerCase().includes('да');
+      ctx.session.step = 'product_media';
+      return ctx.reply('📷 Пришлите фото или мини-видео товара:');
+    }
+
+    if (ctx.session.step === 'product_media' && (ctx.message.photo || ctx.message.video)) {
+      const fileId = ctx.message.photo ? ctx.message.photo.pop().file_id : ctx.message.video.file_id;
+      ctx.session.newProduct.media = fileId;
+      const id = await redis.incr('productCounter');
+      await redis.set(`product:${id}`, ctx.session.newProduct);
+      ctx.session.step = null;
+      ctx.session.newProduct = null;
+      return ctx.reply('✅ Товар добавлен!');
+    }
+
+    if (ctx.session.step) {
+      return ctx.reply('⏳ Пожалуйста, завершите текущее действие или введите /cancel.');
+    }
+
   } catch (err) {
-    console.error('Ошибка при заказе:', err);
-    await ctx.reply('Произошла ошибка. Попробуйте ещё раз.');
+    console.error('❌ Ошибка обработки сообщения:', err);
+    return ctx.reply('Произошла ошибка. Попробуйте ещё раз.');
   }
 });
 
