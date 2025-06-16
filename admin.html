@@ -1,1 +1,28 @@
 
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Admin - JWD Express</title>
+  <style>
+    body { font-family: sans-serif; padding: 2rem; }
+    input { padding: 0.5rem; margin: 0.5rem 0; display: block; }
+  </style>
+</head>
+<body>
+  <h1>🔐 Вход в админку</h1>
+  <input type="password" id="pass" placeholder="Введите пароль" />
+  <button onclick="checkPass()">Войти</button>
+  <script>
+    function checkPass() {
+      const input = document.getElementById('pass').value;
+      if (input === 'admin123') {
+        alert('Добро пожаловать в админку! (демо)');
+      } else {
+        alert('Неверный пароль');
+      }
+    }
+  </script>
+</body>
+</html>
